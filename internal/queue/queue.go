@@ -17,7 +17,7 @@ type MemoryQueue struct {
 }
 type Queue interface {
 	Enqueue(ctx context.Context, job *Job) error
-	Lease(ctx context.Context, workerID string) (*Job, error)
+	Lease(ctx context.Context, WorkerID string) (*Job, error)
 	Ack(ctx context.Context, jobID string) error
 	Nack(ctx context.Context, jobID string, err error) error
 }
@@ -25,9 +25,9 @@ func (q *MemoryQueue)Enqueue(ctx context.Context,job *Job)error{
   q.mu.Lock()
   defer q.mu.Unlock()
   if job.JobID==""{
-	return errors.new("The JobID  cannot be empty")
+	return errors.New("The JobID  cannot be empty")
   }
-  now:=time.now()
+  now:=time.Now()
   job.State = JobPending
   job.Attempts = 0
   job.CreatedOn = now
@@ -38,14 +38,15 @@ func (q *MemoryQueue)Enqueue(ctx context.Context,job *Job)error{
   q.jobs[job.JobID] = job
   return nil
 }
-func (q *MemoryQueue) Lease(ctx context.Context, workerID string) (*Job, error) {
+func (q *MemoryQueue) Lease(ctx context.Context, WorkerID string) (*Job, error) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	now := time.Now()
 	for _, job := range q.jobs {
-		if job.State == JobPending {
+		if job.State == JobPending ||
+   (job.State == JobInProgress && now.After(job.LeasedUntil)) {
 			job.State = JobInProgress
-			job.LeasedBy = workerID
+			job.LeasedBy = WorkerID
 			job.LeasedUntil = now.Add(30 * time.Second)
 			job.UpdatedOn = now
 			return job, nil
@@ -53,29 +54,29 @@ func (q *MemoryQueue) Lease(ctx context.Context, workerID string) (*Job, error) 
 	}
 	return nil, ErrNoJob
 }
-func(q *MemoryQueue)Ack(ctx context.Context,JobID int)error{
+func(q *MemoryQueue)Ack(ctx context.Context,JobID string)error{
  q.mu.Lock()
  defer q.mu.Unlock()
  job,ok:=q.jobs[JobID]
  if !ok{
 	return ErrInvalidState
  }
- if job.State!=JobInProgress{
-	return ErrInvalidState
- }
+if job.LeasedBy == "" || job.LeasedBy != workerID {
+    return ErrInvalidState
+}
  now:=time.Now()
  job.State = JobSucceeded
  job.UpdatedOn = now
  return nil
 }
-func (q *MemoryQueue)Nack(ctx context.Context,JobID int , err error)error{
+func (q *MemoryQueue)Nack(ctx context.Context,JobID string , err error)error{
 q.mu.Lock()
 defer q.mu.Unlock()
 job,ok:=q.jobs[JobID]
 if !ok{
 	return ErrInvalidState
 }
-if job.state!=JobInProgress{
+if job.State!=JobInProgress{
 	return ErrInvalidState
 }
 job.Attempts++
@@ -86,7 +87,7 @@ if job.Attempts >= job.MaxAttempts {
 	} else {
 		job.State = JobPending
 		job.LeasedBy = ""
-		job.LeaseUntil = time.Time{}
+		job.LeasedUntil = time.Time{}
 	}
 	return nil
 }
