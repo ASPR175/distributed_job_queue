@@ -61,7 +61,7 @@ func(q *MemoryQueue)Ack(ctx context.Context,JobID string)error{
  if !ok{
 	return ErrInvalidState
  }
-if job.LeasedBy == "" || job.LeasedBy != workerID {
+if job.LeasedBy == ""{
     return ErrInvalidState
 }
  now:=time.Now()

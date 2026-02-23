@@ -4,13 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-
+    "context"
 	"distributed_job_queue/internal/queue"
 	"distributed_job_queue/internal/metrics"
 )
 type Handlers struct {
 	Queue   queue.Queue
-	Metrics metrics.Metrics
+	MetricsCollector metrics.Metrics
 }
 type enqueueRequest struct {
 	ID          string `json:"id"`
@@ -49,10 +49,10 @@ func (h *Handlers) EnqueueJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.Metrics.IncEnqueued()
+	h.MetricsCollector.IncEnqueued()
 
 	w.WriteHeader(http.StatusAccepted)
 }
 func (h *Handlers) Metrics(w http.ResponseWriter, r *http.Request) {
-	h.Metrics.ServeHTTP(w, r)
+	h.MetricsCollector.ServeHTTP(w, r)
 }
